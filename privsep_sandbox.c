@@ -16,6 +16,7 @@
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 
 #include <netdb.h>
 #include <stdio.h>
@@ -34,15 +35,31 @@
 #include "privsep_sandbox_linux.h"
 
 static pthread_key_t privsep_key;
+static int privsep_initialized;
+
+void privsep_sandbox_init(void)
+{
+
+    assert(privsep_initialized == 0);
+    if (pthread_key_create(&privsep_key, free) != 0) {
+        err(1, "pthread_key_create failed");
+    }
+    privsep_initialized = 1;
+}
 
 static privsep_thread_specific_t *get_tsd(void)
 {
     privsep_thread_specific_t *tsd;
+    struct sockaddr_un sun;
+    int ret;
 
+    printf("%s: enter\n", __func__);
     tsd = pthread_getspecific(privsep_key);
     if (tsd) {
+        printf("returning tsd (%d)\n", tsd->sock);
         return (tsd);
     }
+    printf("allocating tsd and pinning to this thread\n");
     tsd = calloc(1, sizeof(*tsd));
     if (tsd == NULL) {
         return (NULL);
@@ -56,10 +73,27 @@ static privsep_thread_specific_t *get_tsd(void)
          */
         abort();
     }
+    printf("tsd sock %d\n", tsd->sock);
+    bzero(&sun, sizeof(sun));
+    sun.sun_family = PF_UNIX;
+    snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", privsep_get_sockpath());
+    while (1) {
+        printf("Connecting socket %s\n", sun.sun_path);
+        ret = connect(tsd->sock, (struct sockaddr *)&sun, sizeof(sun));
+        if (ret == -1 && errno == EINTR) {
+            continue;
+        } else if (ret == -1) {
+            abort();
+        }
+        break;
+    }
+    printf("connected!\n");
     if (pthread_setspecific(privsep_key, tsd) != 0) {
         free(tsd);
         close(tsd->sock);
     }
+    assert(tsd->sock != 0);
+    printf("returning tsd with fd %d\n", tsd->sock);
     return (tsd);
 }
 
@@ -272,12 +306,16 @@ int privsep_open(const char *path, int flags, ...)
     privsep_thread_specific_t *psd;
     int cmd, fd, ecode;
 
+    printf("%s: enter\n", __func__);
     psd = get_tsd();
+    printf("%s: using file descriptor %d\n", __func__, psd->sock);
     assert(psd != NULL);
     snprintf(oa.path, sizeof(oa.path), "%s", path);
     oa.flags = flags;
     cmd = PRIV_OPEN;
+    printf("sending cmd\n");
     privsep_must_write(psd->sock, &cmd, sizeof(cmd));
+    printf("sending args\n");
     privsep_must_write(psd->sock, &oa, sizeof(oa));
     privsep_must_read(psd->sock, &ecode, sizeof(ecode));
     if (ecode != 0) {

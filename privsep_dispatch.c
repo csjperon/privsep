@@ -37,6 +37,20 @@
 #include "privsep.h"
 
 int privsep_flags;
+static char *privsep_sock_path;
+
+char *privsep_get_sockpath(void)
+{
+
+    return (privsep_sock_path);
+}
+
+static void privsep_set_sockpath(const char *path)
+{
+
+    assert(path != NULL);
+    privsep_sock_path = strdup(path);
+}
 
 static void privsep_handle_dotime_r(privsep_worker_t *pswd)
 {
@@ -292,19 +306,21 @@ static void *privsep_handle_requests(void *arg)
 
 static void *privsep_handle_accept(void *arg)
 {
+    privsep_listener_t *psl;
     privsep_worker_t *pswp;
     int nsock;
 
     printf("%s: entering accept loop\n", __func__);
-    pswp = (privsep_worker_t *)arg;
+    psl = (privsep_listener_t *)arg;
     while (1) {
         printf("accepting connections\n");
-        nsock = accept(pswp->sock, NULL, NULL);
+        nsock = accept(psl->sock, NULL, NULL);
         if (nsock == -1 && (errno == EINTR || errno == EAGAIN)) {
             continue;
         } else if (nsock == -1) {
             err(1, "[privsep] accept failed");
         }
+        printf("accepted fd %d\n", nsock);
         pswp = calloc(1, sizeof(*pswp));
         if (pswp == NULL) {
             err(1, "[privsep] failed to allocate memory");
@@ -320,18 +336,18 @@ static void *privsep_handle_accept(void *arg)
 
 static void privsep_event_loop(int sock)
 {
-    privsep_worker_t *pswp;
+    privsep_listener_t *psl;
     pthread_t thr;
     void *ptr;
 
     printf("%s: enter\n", __func__);
-    pswp = calloc(1, sizeof(*pswp));
-    if (pswp == NULL) {
+    psl = calloc(1, sizeof(*psl));
+    if (psl == NULL) {
         err(1, "calloc failed");
     }
-    pswp->sock = sock;
+    psl->sock = sock;
     printf("Creating accept thread\n");
-    if (pthread_create(&thr, NULL, privsep_handle_accept, pswp) != 0) {
+    if (pthread_create(&thr, NULL, privsep_handle_accept, psl) != 0) {
         err(1, "[privsep] failed to launch accept thread");
     }
     if (pthread_join(thr, &ptr) != 0) {
@@ -389,17 +405,15 @@ static int privsep_setup_socket(privsep_t *psd)
     if (chown(sock_path, pwd->pw_uid, pwd->pw_gid) == -1) {
         err(1, "[privsep] chown failed");
     }
+    privsep_set_sockpath(sock_path);
     return (sock);
 }
 
 int privsep_init(privsep_t *psd)
 {
-    int sock, sock_pair[2];
+    int sock;
     pid_t pid;
 
-    if (socketpair(AF_LOCAL, SOCK_STREAM, PF_UNSPEC, sock_pair) == -1) {
-        err(1, "socketpair failed");
-    }
     sock = privsep_setup_socket(psd);
     privsep_flags |= PRIVSEP_NON_PRIVILEGED;
     pid = fork();
@@ -409,12 +423,10 @@ int privsep_init(privsep_t *psd)
     if (pid == 0) {
         privsep_flags &= ~PRIVSEP_NON_PRIVILEGED;
         privsep_flags |= PRIVSEP_PRIVILEGED;
-        close(sock_pair[0]);
         privsep_event_loop(sock);
         printf("privsep event loop exiting\n");
         _exit(0);
     }
     printf("privsep (privileged) process forked pid: %d\n", pid);
-    close(sock_pair[1]);
     return (0);
 }
