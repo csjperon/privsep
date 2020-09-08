@@ -341,8 +341,8 @@ static const struct sock_filter h2o_main_insns[] = {
 #endif
 
     /* Default deny */
-    //BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ERRNO | (SECCOMP_RET_DATA & EACCES)),
-    BPF_STMT(BPF_RET+BPF_K, SECCOMP_FILTER_FAIL),
+    BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ERRNO | (SECCOMP_RET_DATA & EACCES)),
+    //BPF_STMT(BPF_RET+BPF_K, SECCOMP_FILTER_FAIL),
 };
 
 static const struct sock_fprog h2o_main_program = {

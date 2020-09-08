@@ -106,6 +106,7 @@ enum {
     PRIV_LOCALTIME
 };
 
+void        privsep_cleanup(privsep_t *);
 int         privsep_init(privsep_t *);
 void        privsep_sandbox_init(void);
 char *      privsep_marshal_vec(char *const [], size_t *);

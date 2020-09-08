@@ -39,6 +39,14 @@
 int privsep_flags;
 static char *privsep_sock_path;
 
+void privsep_cleanup(privsep_t *psp)
+{
+
+    assert(privsep_sock_path != NULL);
+    free(privsep_sock_path);
+    free(psp->user);
+}
+
 char *privsep_get_sockpath(void)
 {
 

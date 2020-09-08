@@ -280,24 +280,8 @@ ssize_t privsep_sendmsg(int sock, struct msghdr *msg, int flags)
 
 void privsep_bind_sandbox(int policy)
 {
-    /*
-     * SANDBOX_POLICY_BASIC is used to set a minimal sandbox policy on a
-     * process. This process will not be using privsep, in which case 
-     * skip the call to drop privs (which assumes the full privsep model
-     * is being used.
-     */
-    switch (policy) {
-    case SANDBOX_POLICY_NONE:
-        return;
-        break;
-    case SANDBOX_POLICY_NEVERBLEED:
-        break;
-    case SANDBOX_POLICY_H2OMAIN:
-#ifdef __linux__
-        sandbox_bind(policy);
-#endif
-        break;
-    }
+
+    sandbox_bind(policy);
 }
 
 int privsep_open(const char *path, int flags, ...)
@@ -374,11 +358,15 @@ static int process_getaddr_data(privsep_getaddrinfo_result_t *vec,
 
 void privsep_freeaddrinfo(struct addrinfo *ai)
 {
+    struct addrinfo *next;
 
-    assert(ai != NULL);
-    free(ai->ai_addr);
-    free(ai->ai_canonname);
-    free(ai);
+    for(; ai != NULL;) {
+        next = ai->ai_next;
+        free(ai->ai_addr);
+        free(ai->ai_canonname);
+        free(ai);
+        ai = next;
+    }
 }
 
 int privsep_getaddrinfo(const char *hostname, const char *servname,
