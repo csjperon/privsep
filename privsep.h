@@ -23,6 +23,11 @@ struct privsep_thread_specific {
 };
 typedef struct privsep_thread_specific privsep_thread_specific_t;
 
+struct privsep_listener {
+    int                 sock;
+};
+typedef struct privsep_listener privsep_listener_t;
+
 struct privsep_worker {
     int                 sock;
     pthread_t           thr;
@@ -102,6 +107,7 @@ enum {
 };
 
 int         privsep_init(privsep_t *);
+void        privsep_sandbox_init(void);
 char *      privsep_marshal_vec(char *const [], size_t *);
 char **     privsep_unmarshal_vec(char *, size_t);
 int         privsep_may_read(int, void *, size_t);
@@ -115,6 +121,7 @@ int         privsep_receive_fd(int);
  * Sandbox interfaces (i.e. functions that will be getting called from
  * within the privsep sandbox
  */
+char *      privsep_get_sockpath(void);
 FILE *      privsep_fopen(const char *, const char *);
 struct tm * privsep_localtime_r(const time_t *, struct tm *);
 struct tm * privsep_gmtime_r(const time_t *, struct tm *);

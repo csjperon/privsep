@@ -84,6 +84,12 @@ static const struct sock_filter h2o_main_insns[] = {
     SC_ALLOW(__NR_sched_getaffinity),
     SC_ALLOW(__NR_sigaltstack),
     SC_ALLOW(__NR_pause),
+    /*
+     * ASAN ONLY !
+     */
+    SC_ALLOW(__NR_prctl),
+    /* XXX end dangerous ASAN syscalls */
+
 
     /*
      * Deny open(2) and openat(2) in a non-fatal manner. Often times libraries
